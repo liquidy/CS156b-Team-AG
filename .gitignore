@@ -1,0 +1,20 @@
+# Emacs files
+*~
+
+# Provided files
+mu/all.dta
+mu/all.idx
+mu/example.dta
+mu/qual.dta
+mu/README
+mu/solution.dta
+um/all.dta
+um/all.idx
+um/example.dta
+um/qual.dta
+um/README
+um/solution.dta
+
+# Generated output
+movieFeature
+userFeature
