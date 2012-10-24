@@ -1,13 +1,19 @@
 import pickle
 
 # Variables and constants
-num_features = 2
+num_features = 1
 
 
 def predict_rating(movie, user):
     rating_sum = 0
     for i in range(num_features):
         rating_sum += userFeature[i][user] * movieFeature[i][movie]
+
+    if rating_sum > 5:
+        rating_sum = 5
+    elif rating_sum < 1:
+        rating_sum = 1
+        
     return rating_sum
 
 
