@@ -42,14 +42,12 @@ public class OutputGenerator {
 		double ratingSum = 0;
 		for (int i = 0; i < Trainer.NUM_FEATURES; i++) {
 			ratingSum += userFeatures[i][user] * movieFeatures[i][movie];
+			if (ratingSum > 5) {
+				ratingSum = 5;
+			} else if (ratingSum < 1) {
+				ratingSum = 1;
+			}
 		}
-		
-		if (ratingSum > 5) {
-			ratingSum = 5;
-		} else if (ratingSum < 1) {
-			ratingSum = 1;
-		}
-		
     return ratingSum;
 	}
 }
