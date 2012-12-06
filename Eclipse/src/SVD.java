@@ -10,24 +10,28 @@ import java.io.ObjectOutputStream;
 import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Random;
 
-public class Trainer {
+public class SVD {
 
-	public double LRATE_BIAS_INITIAL = 0.007;
 	public double LRATE_FEATURES_INITIAL = 0.007;
-	public double LRATE_MW_INITIAL = 0.001;
-	public double K_BIAS_INITIAL = 0.001;
-	public double K_FEATURES_INITIAL = 0.01;
-	public double K_MW_INITIAL = 0.02;
+	public double LRATE_USER_BIAS_INITIAL = 3e-3;
+	public double LRATE_MOVIE_BIAS_INITIAL = 2e-3;
+	public double K_FEATURES_INITIAL = 0.008577;
+	public double K_USER_BIAS_INITIAL = 0.094474;
+	public double K_MOVIE_BIAS_INITIAL = 0.005;
 
-	public static final int NUM_EPOCHS_SPAN = 30;
+	public Random rand = new Random(0);
+
+	public static final int NUM_EPOCHS_SPAN = 5;
 	public static final double MIN_ERROR_DIFF = 0.00001;
 
-	public static final double GLOBAL_MEAN = 3.6033;
+	public double GLOBAL_MEAN = 3.6033;
 	public static final double CINEMATCH_BASELINE = 0.9514;
 
 	public static final int NUM_USERS = 458293;
 	public static final int NUM_MOVIES = 17770;
+	public static final int NUM_DATES = 2243;
 	public static final int NUM_POINTS = 102416306;
 	public static final int NUM_1_POINTS = 94362233;
 	public static final int NUM_2_POINTS = 1965045;
@@ -45,6 +49,7 @@ public class Trainer {
 	public static final String LOGFILE = "log.txt";
 
 	public int NUM_FEATURES;
+	public int TEST_PARAM;
 
 	// Data that is stored in memory
 	public int[] users = new int[NUM_TRAINING_PROBE_POINTS];
@@ -59,35 +64,42 @@ public class Trainer {
 	public double[][] movieFeatures;
 	public double[] userBias;
 	public double[] movieBias;
-	public double[][] mw;
-	public double[][] sum_mw;
-	public double[] norm;
 
 	// Current lrates
-	public double LRATE_BIAS;
-	public double LRATE_FEATURES;
-	public double LRATE_MW;
-	public double K_BIAS;
-	public double K_FEATURES;
-	public double K_MW;
+	public double LRATE_FEATURES = LRATE_FEATURES_INITIAL;
+	public double LRATE_USER_BIAS = LRATE_USER_BIAS_INITIAL;
+	public double LRATE_MOVIE_BIAS = LRATE_MOVIE_BIAS_INITIAL;
+	public double K_FEATURES = K_FEATURES_INITIAL;
+	public double K_USER_BIAS = K_USER_BIAS_INITIAL;
+	public double K_MOVIE_BIAS = K_MOVIE_BIAS_INITIAL;
 
-	public Trainer(int numFeatures) {
+	public double LRATE_USER_BIAS_BEST;
+	public double LRATE_MOVIE_BIAS_BEST;
+	public double K_FEATURES_BEST;
+	public double K_USER_BIAS_BEST;
+	public double K_MOVIE_BIAS_BEST;
+
+	public SVD(int numFeatures) {
 		this.NUM_FEATURES = numFeatures;
 
 		// Initialize things that are specific to the training session.
 		initializeVars();
 	}
 
-	public Trainer(int numFeatures, double LRATE_BIAS, double LRATE_FEATURES,
+	public SVD(int numFeatures, int testParam) {
+		this.NUM_FEATURES = numFeatures;
+		this.K_FEATURES_INITIAL = testParam;
+
+		// Initialize things that are specific to the training session.
+		initializeVars();
+	}
+
+	public SVD(int numFeatures, double LRATE_BIAS, double LRATE_FEATURES,
 			double LRATE_MW, double K_BIAS, double K_FEATURES, double K_MW) {
 		// Set the constants to the specified values.
 		this.NUM_FEATURES = numFeatures;
-		this.LRATE_BIAS_INITIAL = LRATE_BIAS;
 		this.LRATE_FEATURES_INITIAL = LRATE_FEATURES;
-		this.LRATE_MW_INITIAL = LRATE_MW;
-		this.K_BIAS_INITIAL = K_BIAS;
 		this.K_FEATURES_INITIAL = K_FEATURES;
-		this.K_MW_INITIAL = K_MW;
 
 		// Initialize things that are specific to the training session.
 		initializeVars();
@@ -98,35 +110,43 @@ public class Trainer {
 		movieFeatures = new double[NUM_MOVIES][NUM_FEATURES];
 		userBias = new double[NUM_USERS];
 		movieBias = new double[NUM_MOVIES];
-		mw = new double[NUM_USERS][NUM_FEATURES];
-		sum_mw = new double[NUM_USERS][NUM_FEATURES];
-		norm = new double[NUM_USERS];
 
-		LRATE_BIAS = LRATE_BIAS_INITIAL;
 		LRATE_FEATURES = LRATE_FEATURES_INITIAL;
-		LRATE_MW = LRATE_MW_INITIAL;
-		K_BIAS = K_BIAS_INITIAL;
-		K_FEATURES = K_FEATURES_INITIAL;
-		K_MW = K_MW_INITIAL;
+		LRATE_USER_BIAS = LRATE_USER_BIAS_INITIAL;
+		LRATE_MOVIE_BIAS = LRATE_MOVIE_BIAS_INITIAL;
 
 		// Initialize weights.
 		for (int i = 0; i < userFeatures.length; i++) {
 			for (int j = 0; j < userFeatures[i].length; j++) {
-				userFeatures[i][j] = (Math.random() - 0.5) / 5000;
+				userFeatures[i][j] = (rand.nextFloat() - 0.5) / 50;
 			}
 		}
 		for (int i = 0; i < movieFeatures.length; i++) {
 			for (int j = 0; j < movieFeatures[i].length; j++) {
-				movieFeatures[i][j] = (Math.random() - 0.5) / 5000;
+				movieFeatures[i][j] = (rand.nextFloat() - 0.5) / 50;
 			}
 		}
+	}
+
+	private double genRandomParam(double param) {
+		// [.1, 10]
+		double significand = rand.nextFloat() * 9 + 1;
+		int exponent = (int) (rand.nextFloat() * 2 - 2);
+		double factor = significand * Math.pow(10, exponent);
+
+		return factor * param;
+	}
+	
+	private void setVarsToNull() {
+		userFeatures = null;
+		movieFeatures = null;
+		userBias = null;
+		movieBias = null;
 	}
 
 	public void train() throws NumberFormatException, IOException {
 		System.out.println(timestampLine(String.format("Training %d features.",
 				NUM_FEATURES)));
-		System.out.println(String.format("%.3f %.3f %.3f %.3f %.3f %.3f",
-				LRATE_BIAS, LRATE_FEATURES, LRATE_MW, K_BIAS, K_FEATURES, K_MW));
 
 		// Read in input
 		readInput();
@@ -135,15 +155,17 @@ public class Trainer {
 		BufferedWriter logWriter = new BufferedWriter(new FileWriter(LOGFILE, true));
 		logWriter.write("\n");
 
-		// Start training
+		// TRAIN WITH TRAINING SET ONLY (no probe)
 		precompute(NUM_TRAINING_POINTS);
 		double previousRmse = calcProbeRmse();
 		logRmse(logWriter, previousRmse, 0);
 		int numEpochsToTrain = 0;
 		for (int i = 1; true; i++) {
-			// TRAIN WITH TRAINING SET ONLY (no probe).
 			double rmse = trainWithNumPoints(NUM_TRAINING_POINTS);
 			logRmse(logWriter, rmse, i);
+
+			// Slow down learning rate as we're getting close to the answer.
+			LRATE_FEATURES *= .9;
 
 			// If probe error has been going up, we should stop.
 			double rmseDiff = previousRmse - rmse;
@@ -151,46 +173,34 @@ public class Trainer {
 				System.out
 						.println(timestampLine("Probe error has started"
 								+ " to go up significantly; memorizing number of epochs to train."));
+				generateProbeOutput();
 				numEpochsToTrain = i;
 				break;
 			}
 
-			// Slow down learning rate as we're getting close to the answer.
-			// if (rmseDiff < 0.0005) {
-			// LRATE_BIAS = Math.min(LRATE_BIAS, 0.0005);
-			// LRATE_FEATURES = Math.min(LRATE_FEATURES, 0.0005);
-			// } else if (rmseDiff < 0.001) {
-			// LRATE_BIAS = Math.min(LRATE_BIAS, 0.001);
-			// LRATE_FEATURES = Math.min(LRATE_FEATURES, 0.001);
-			// }
-			LRATE_FEATURES *= .9;
-			LRATE_BIAS *= .9;
-			LRATE_MW *= .9;
-
 			previousRmse = rmse;
 		}
-		generateOutput(String.format("%5.0f_no_probe", previousRmse * 100000));
 
 		// TRAIN WITH PROBE.
-		System.out.println("Re-training for " + numEpochsToTrain
-				+ " epochs, but now with probe included.\n");
+		setVarsToNull();
 		initializeVars();
 		precompute(NUM_TRAINING_PROBE_POINTS);
+		logEpoch(logWriter, 0);
 		for (int i = 1; i <= numEpochsToTrain + NUM_EPOCHS_SPAN; i++) {
 			// Train with training set AND probe.
-			double rmse = trainWithNumPoints(NUM_TRAINING_PROBE_POINTS);
-			logRmse(logWriter, rmse, i);
+			trainWithNumPoints(NUM_TRAINING_PROBE_POINTS);
+			logEpoch(logWriter, i);
 
-			// Update LRATE's
+			// Slow down learning rate as we're getting close to the answer.
 			LRATE_FEATURES *= .9;
-			LRATE_BIAS *= .9;
-			LRATE_MW *= .9;
 
-			if (i >= numEpochsToTrain) {
-				generateOutput(String.format("%5.0f_%d", previousRmse * 100000, i));
+			if (i == numEpochsToTrain + NUM_EPOCHS_SPAN) {
+				generateOutput();
 			}
 		}
+
 		saveBestParams();
+		logWriter.close();
 
 		System.out.println("Done!");
 	}
@@ -199,10 +209,7 @@ public class Trainer {
 		int user;
 		short movie, date;
 		byte rating;
-		int prevUser = -1;
-		double err, ub, mb, uf, mf, tmp_mw;
-		short m;
-		double[] tmp_sum = new double[NUM_FEATURES];
+		double err, uf, mf;
 
 		for (int j = 0; j < numPoints; j++) {
 			user = users[j];
@@ -210,71 +217,22 @@ public class Trainer {
 			date = dates[j];
 			rating = ratings[j];
 
-			// Determine if current user has changed.
-			if (user != prevUser) {
-				// Reset sum_mw and calculate sums
-				for (int k = 0; k < NUM_FEATURES; k++) {
-					sum_mw[user][k] = 0;
-				}
-				for (int l = j; l < numPoints && users[l] == user; l++) {
-					m = movies[l];
-					for (int k = 0; k < NUM_FEATURES; k++) {
-						sum_mw[user][k] += mw[m][k];
-					}
-				}
-				// Reset and calculate tmp_sum
-				for (int k = 0; k < NUM_FEATURES; k++) {
-					tmp_sum[k] = 0;
-				}
-			}
-			prevUser = user;
-
 			// Calculate the error.
-			err = rating - predictRating(movie, user);
+			err = rating - predictRating(movie, user, date);
 
 			// Train biases.
-			ub = userBias[user];
-			mb = movieBias[movie];
-			userBias[user] += LRATE_BIAS * (err - K_BIAS * ub);
-			movieBias[movie] += LRATE_BIAS * (err - K_BIAS * mb);
+			userBias[user] += LRATE_USER_BIAS * (err - K_USER_BIAS * userBias[user]);
+			movieBias[movie] += LRATE_MOVIE_BIAS
+					* (err - K_MOVIE_BIAS * movieBias[movie]);
 
-			// Train all features for each point that we encounter.
+			// Train all features.
 			for (int k = 0; k < NUM_FEATURES; k++) {
 				uf = userFeatures[user][k];
 				mf = movieFeatures[movie][k];
 
 				userFeatures[user][k] += LRATE_FEATURES * (err * mf - K_FEATURES * uf);
 				movieFeatures[movie][k] += LRATE_FEATURES
-						* (err * (uf + norm[user] * sum_mw[user][k]) - K_FEATURES * mf);
-
-				// Update tmp_sum, which sums the gradients for mw
-				tmp_sum[k] += err * norm[user] * mf;
-			}
-
-			// Check if this is the last movie for that user. If so,
-			// train movie weights.
-			if (j + 1 == numPoints || users[j + 1] != user) {
-				for (int l = j; l >= 0 && users[l] == user; l--) {
-					m = movies[l];
-					for (int k = 0; k < NUM_FEATURES; k++) {
-						tmp_mw = mw[m][k];
-						mw[m][k] += LRATE_MW * (tmp_sum[k] - K_MW * tmp_mw);
-						sum_mw[user][k] += mw[m][k] - tmp_mw;
-					}
-				}
-			}
-		}
-		// Recalculate sum_mw
-		for (int j = 0; j < NUM_USERS; j++) {
-			for (int k = 0; k < NUM_FEATURES; k++) {
-				sum_mw[j][k] = 0;
-			}
-		}
-		for (int j = 0; j < numPoints; j++) {
-			user = users[j];
-			movie = movies[j];
-			for (int k = 0; k < NUM_FEATURES; k++) {
-				sum_mw[user][k] += mw[movie][k];
+						* (err * uf - K_FEATURES * mf);
 			}
 		}
 
@@ -282,38 +240,83 @@ public class Trainer {
 		return calcProbeRmse();
 	}
 
-	public void precompute(int numPoints) {
-		int user;
-		for (int j = 0; j < numPoints; j++) {
-			user = users[j];
-			norm[user]++;
-		}
-		for (int j = 0; j < norm.length; j++) {
-			if (norm[j] == 0) {
-				norm[j] = 1;
-			} else {
-				norm[j] = 1 / Math.sqrt(norm[j]);
+	public void precompute(int numPoints) throws IOException {
+		// If we are precomputing with probe, we need to re-read the data in the
+		// correct order.
+		if (numPoints == NUM_TRAINING_PROBE_POINTS) {
+			// Read input into memory
+			InputStream fis = new FileInputStream(INPUT_DATA);
+			BufferedReader br = new BufferedReader(new InputStreamReader(fis,
+					Charset.forName("UTF-8")));
+			InputStream fisIdx = new FileInputStream(INPUT_INDEX);
+			BufferedReader brIdx = new BufferedReader(new InputStreamReader(fisIdx,
+					Charset.forName("UTF-8")));
+
+			// Read INPUT_INDEX
+			System.out.println(timestampLine("Loading data index..."));
+			byte[] dataIndices = new byte[NUM_POINTS];
+			String line;
+			byte index;
+			int lineNum = 0;
+			while ((line = brIdx.readLine()) != null) {
+				index = Byte.parseByte(line);
+				dataIndices[lineNum] = index;
+				lineNum++;
+			}
+
+			// Read INPUT_DATA
+			System.out.println(timestampLine("Loading data..."));
+			String[] parts;
+			int user;
+			short movie, date;
+			byte rating;
+			lineNum = 0;
+			int trainingDataIndex = 0;
+			while ((line = br.readLine()) != null) {
+				parts = line.split(" ");
+				user = Integer.parseInt(parts[0]) - 1;
+				movie = (short) (Short.parseShort(parts[1]) - 1);
+				date = (short) (Short.parseShort(parts[2]) - 1);
+				rating = (byte) (Byte.parseByte(parts[3]));
+				if (dataIndices[lineNum] == 1 || dataIndices[lineNum] == 2
+						|| dataIndices[lineNum] == 3 || dataIndices[lineNum] == 4) {
+
+					users[trainingDataIndex] = user;
+					movies[trainingDataIndex] = movie;
+					dates[trainingDataIndex] = date;
+					ratings[trainingDataIndex] = rating;
+					trainingDataIndex++;
+				}
+				lineNum++;
+				if (lineNum % 10000000 == 0) {
+					System.out.println(timestampLine(lineNum + " / " + NUM_POINTS));
+				}
 			}
 		}
-		System.out.println(timestampLine("Finished precomputation.\n"));
+		
+		// Compute mean.
+		long ratingSum = 0;
+		for (int i = 0; i < numPoints; i++) {
+			ratingSum += ratings[i];
+		}
+		GLOBAL_MEAN = ((double) ratingSum) / numPoints;
 	}
 
-	public double predictRating(int movie, int user) {
-		double ratingSum = 0;
-		ratingSum += GLOBAL_MEAN;
-		// Add in movie and user biases.
-		ratingSum += movieBias[movie];
+	public double predictRating(int movie, int user, int date) {
+		// Compute ratings
+		double ratingSum = GLOBAL_MEAN;
+		// Add in biases.
 		ratingSum += userBias[user];
+		ratingSum += movieBias[movie];
 		// Take dot product of feature vectors.
 		for (int i = 0; i < NUM_FEATURES; i++) {
-			ratingSum += (userFeatures[user][i] + sum_mw[user][i] * norm[user])
-					* movieFeatures[movie][i];
+			ratingSum += userFeatures[user][i] * movieFeatures[movie][i];
 		}
 		return ratingSum;
 	}
 
-	public double outputRating(int movie, int user) {
-		double rating = predictRating(movie, user);
+	public double outputRating(int movie, int user, int date) {
+		double rating = predictRating(movie, user, date);
 		rating = addAndClip(rating, 0);
 		return rating;
 	}
@@ -346,7 +349,7 @@ public class Trainer {
 			date = (short) probeData[j][2];
 			rating = (byte) probeData[j][3];
 
-			rmse += Math.pow(rating - predictRating(movie, user), 2);
+			rmse += Math.pow(rating - predictRating(movie, user, date), 2);
 		}
 		rmse = Math.sqrt(rmse / NUM_4_POINTS);
 
@@ -361,6 +364,14 @@ public class Trainer {
 		String logline = currentDate
 				+ String.format(": epoch %d probe RMSE %.5f (%.2f%%) ", i, rmse,
 						predictedPercent);
+		System.out.println(logline);
+		logWriter.write(logline + "\n");
+	}
+
+	private void logEpoch(BufferedWriter logWriter, int i) throws IOException {
+		// Print + log some stats.
+		String currentDate = new SimpleDateFormat("h:mm:ss a").format(new Date());
+		String logline = currentDate + String.format(": epoch %d", i);
 		System.out.println(logline);
 		logWriter.write(logline + "\n");
 	}
@@ -398,7 +409,7 @@ public class Trainer {
 			parts = line.split(" ");
 			user = Integer.parseInt(parts[0]) - 1;
 			movie = (short) (Short.parseShort(parts[1]) - 1);
-			date = (short) (Short.parseShort(parts[2]));
+			date = (short) (Short.parseShort(parts[2]) - 1);
 			rating = (byte) (Byte.parseByte(parts[3]));
 			if (dataIndices[lineNum] == 1 || dataIndices[lineNum] == 2
 					|| dataIndices[lineNum] == 3) {
@@ -471,33 +482,62 @@ public class Trainer {
 		objOut.writeObject(movieBias);
 		objOut.close();
 		fileOut.close();
-		// Save best_mw
-		fileOut = new FileOutputStream("mw");
-		objOut = new ObjectOutputStream(fileOut);
-		objOut.writeObject(mw);
-		objOut.close();
-		fileOut.close();
-		// Save best_sum_mw
-		fileOut = new FileOutputStream("sum_mw");
-		objOut = new ObjectOutputStream(fileOut);
-		objOut.writeObject(sum_mw);
-		objOut.close();
-		fileOut.close();
 	}
 
-	private void generateOutput(String fileName) throws IOException {
-		FileWriter fstream = new FileWriter(fileName);
+	private void generateOutput() throws IOException {
+		FileWriter fstream = new FileWriter("SVD_1234_with_probe_training");
 		BufferedWriter out = new BufferedWriter(fstream);
 		int movie, user, date;
 		double predictedRating;
+		for (int i = 0; i < NUM_TRAINING_PROBE_POINTS; i++) {
+			user = users[i];
+			movie = movies[i];
+			date = dates[i];
 
+			predictedRating = outputRating(movie, user, date);
+			out.write(String.format("%d %d %.4f\n", user, movie, predictedRating));
+		}
+		out.close();
+		
+		fstream = new FileWriter("SVD_5_with_probe_training");
+		out = new BufferedWriter(fstream);
 		for (int i = 0; i < qualData.length; i++) {
 			user = qualData[i][0];
 			movie = qualData[i][1];
 			date = qualData[i][2];
 
-			predictedRating = outputRating(movie, user);
-			out.write(String.format("%.4f\n", predictedRating));
+			predictedRating = outputRating(movie, user, date);
+			out.write(String.format("%d %d %.4f\n", user, movie, predictedRating));
+		}
+		out.close();
+	}
+
+	private void generateProbeOutput() throws IOException {
+		FileWriter fstream = new FileWriter("SVD_123_no_probe_training");
+		BufferedWriter out = new BufferedWriter(fstream);
+		int user;
+		short movie, date;
+		double predictedRating;
+		for (int j = 0; j < NUM_TRAINING_POINTS; j++) {
+			user = users[j];
+			movie = (short) movies[j];
+			date = (short) dates[j];
+
+			predictedRating = outputRating(movie, user, date);
+			out.write(String.format("%d %d %.4f\n", user, movie, predictedRating));
+		}
+		out.close();
+		
+		fstream = new FileWriter("SVD_4_no_probe_training");
+		out = new BufferedWriter(fstream);
+		// Test the model in probe set.
+		for (int j = 0; j < probeData.length; j++) {
+			user = probeData[j][0];
+			movie = (short) probeData[j][1];
+			date = (short) probeData[j][2];
+
+			predictedRating = outputRating(movie, user, date);
+			out.write(String.format("%d %d %.4f\n", user, movie, predictedRating));
 		}
 		out.close();
 	}
@@ -505,14 +545,16 @@ public class Trainer {
 	public static void main(String[] args) throws NumberFormatException,
 			IOException {
 
-		Trainer trainer;
+		SVD trainer;
 		if (args.length == 1) {
-			trainer = new Trainer(Integer.parseInt(args[0]));
+			trainer = new SVD(Integer.parseInt(args[0]));
+		} else if (args.length == 2) {
+			trainer = new SVD(Integer.parseInt(args[0]), Integer.parseInt(args[1]));
 		} else if (args.length == 7) {
-			trainer = new Trainer(Integer.parseInt(args[0]),
-					Double.parseDouble(args[1]), Double.parseDouble(args[2]),
-					Double.parseDouble(args[3]), Double.parseDouble(args[4]),
-					Double.parseDouble(args[5]), Double.parseDouble(args[6]));
+			trainer = new SVD(Integer.parseInt(args[0]), Double.parseDouble(args[1]),
+					Double.parseDouble(args[2]), Double.parseDouble(args[3]),
+					Double.parseDouble(args[4]), Double.parseDouble(args[5]),
+					Double.parseDouble(args[6]));
 		} else {
 			System.exit(1);
 			return;
